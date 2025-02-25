@@ -1,0 +1,92 @@
+:root {
+  --primary-purple: #6B46C1;
+  --light-purple: #9F7AEA;
+  --dark-purple: #44337A;
+  --purple-hover: #805AD5;
+  --purple-bg: #1A1625;
+  --accent-gold: #F6E05E;
+  --accent-pink: #D53F8C;
+}
+
+:root, .title, .label {
+  background-color: var(--purple-bg);
+  color: white !important;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+  padding: 1rem;
+  font-weight: normal;
+  overflow-y: auto;
+  font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  display: flex;
+  place-items: center;
+  background-color: var(--purple-bg);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app, #pageroot {
+  width: 100%;
+  overflow-y: auto;
+}
+
+/* Improved button styles */
+.button {
+  transition: all 0.3s ease !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+}
+
+.button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(159, 122, 234, 0.3);
+}
+
+.button.is-info {
+  background: linear-gradient(135deg, var(--primary-purple), var(--purple-hover)) !important;
+  border-color: var(--light-purple) !important;
+}
+
+.button.is-info:hover {
+  background: linear-gradient(135deg, var(--purple-hover), var(--primary-purple)) !important;
+}
+
+/* Typography improvements */
+h1, h2, h3, .label {
+  font-family: 'Poppins', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+/* Add a subtle animation to the page */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.section-card {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(26, 22, 37, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-purple);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--light-purple);
+}
