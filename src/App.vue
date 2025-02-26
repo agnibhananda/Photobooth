@@ -150,7 +150,10 @@ async function hallucinate() {
   })();
 
   try {
-    // capture is a data-uri, extract the base64 string
+    // Store the full data URI for the original image
+    const originalImageDataURI = image.value;
+    
+    // capture is a data-uri, extract the base64 string for diffusion
     let imgdata = image.value!.substring(22);
 
     // run the diffusion with character arguments
@@ -161,7 +164,8 @@ async function hallucinate() {
     
     // Wait a moment for the image to load before uploading
     setTimeout(() => {
-      upload();
+      // Pass the original image data URI to upload
+      upload(originalImageDataURI);
     }, 500);
 
   } finally {
@@ -199,14 +203,16 @@ async function poll_progress() {
 let downlink = ref<string>();
 
 // upload the file to fileserver.py
-async function upload() {
+async function upload(originalImageDataURI: string) {
   if (!diffusion.value || diffusion.value.src === '/assets/transparent.png') {
-    console.warn("No image to upload");
+    console.warn("No generated image to upload");
     return;
   }
   
   try {
-    // Send the image to our fileserver
+    console.log("Uploading generated image...");
+    
+    // First, upload the generated image using the original working format
     const response = await fetch('http://localhost:8000/upload', {
       method: 'POST',
       headers: {
@@ -218,16 +224,39 @@ async function upload() {
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
     
     const data = await response.json();
-    console.log("Image uploaded successfully:", data.url);
+    console.log("Generated image uploaded successfully:", data.url);
     
     // Set the download link
     downlink.value = data.url;
+    
+    // Now, upload the original image separately if available
+    if (originalImageDataURI) {
+      console.log("Uploading original image...");
+      
+      const originalResponse = await fetch('http://localhost:8000/upload-original', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: originalImageDataURI
+        })
+      });
+      
+      if (originalResponse.ok) {
+        const originalData = await originalResponse.json();
+        console.log("Original image uploaded successfully:", originalData.url);
+      } else {
+        console.warn("Failed to upload original image");
+      }
+    }
   } catch (error) {
-    console.error("Error uploading image:", error);
+    console.error("Error uploading images:", error);
   }
 }
 

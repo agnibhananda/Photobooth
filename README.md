@@ -4,9 +4,19 @@
     Take a photo and let AI create personalized Indian-styled artwork!
 </p>
 
-## Overview
+# Project Name
+
+<div align="center">
+  <img src="example.gif" alt="Example Usage" width="600"/>
+  <br/>
+  <img src="preview.png" alt="Preview of Styles" width="600"/>
+</div>
+
+## Description
 
 This AI Photo Booth application transforms photos into various artistic styles while maintaining Indian features and characteristics. It uses Stable Diffusion with ControlNet for accurate pose and feature preservation.
+
+## Overview
 
 ## Requirements
 

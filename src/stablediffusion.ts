@@ -56,6 +56,7 @@ export type DiffusionOptions = {
   n_iter?: number;
   batch_size?: number;
   sampler?: string;
+  sampler_name?: string;
 
 }
 
@@ -74,7 +75,7 @@ export async function diffusion(opt: DiffusionOptions): Promise<DataURI[]> {
     },
     body: JSON.stringify({
       prompt: opt.prompt,
-      negative_prompt: use(opt.negative_prompt, ""), // TODO: use preset
+      negative_prompt: use(opt.negative_prompt, "deformed face, distorted face, disfigured, mutation, extra limbs, ugly, poorly drawn face, bad anatomy,"),
       init_images: [ opt.image ],
       seed: use(opt.seed, -1),
       steps: use(opt.steps, 20),
@@ -139,17 +140,20 @@ function dif(image: string, model: string, depth: number, pose: number, edges: n
   console.log("%c DIFFUSION prompt %c%s%c with %c%s", "background: lightgray", "background: yellowgreen", prompt,
     "background: lightgray", "background: lightblue", JSON.stringify({ model, depth, pose, edges }));
   
+  // Add stronger facial similarity to the prompt if not already present
+
+  
   return diffusion({ 
     image, 
     prompt, 
     model, 
-    denoising_strength: 0.75,
+    denoising_strength: 0.70, // Further reduced to preserve more of the original face
     control: controlfn(depth, pose, edges),
-    negative_prompt: "dark skin, brown skin, tanned skin, dark complexion, deformed face, distorted face, disfigured, mutation, extra limbs, ugly, poorly drawn face, bad anatomy,",
-    cfg_scale: 7.0,     // Slightly reduced for faster generation
-    steps: 30,          // Reduced from 30 to 20 for faster generation
-    resolution: 512,    // Reduced from 768 to 512 for faster generation
-    sampler_name: "DPM++ 2M Karras"  // Faster sampler
+    negative_prompt: "dark skin, african, american, east asian, european,deformed face, distorted face, disfigured, mutation, extra limbs, ugly, poorly drawn face, bad anatomy, different face, wrong face",
+    cfg_scale: 7.0,     // Further reduced to allow more influence from the reference image
+    steps: 40,          // Increased for better quality
+    resolution: 512,
+    sampler_name: "DPM++ 2M Karras"
   });
 }
 
@@ -157,9 +161,9 @@ function dif(image: string, model: string, depth: number, pose: number, edges: n
 // they should always be all enabled, to get previews
 const f = (f: number) => f > 1.0 ? 1.0 : f < 0.0 ? 0.0 : f;
 const controlfn = (depth: number, openpose: number, softedge: number) => ({
-  depth:    { enabled: true, weight: f(depth), control_mode: "Balanced" },
-  openpose: { enabled: true, weight: f(openpose), control_mode: "My prompt is more important" },
-  softedge: { enabled: true, weight: f(softedge + 0.2), control_mode: "Balanced" }, // Increase edge detection weight
+  depth:    { enabled: true, weight: f(depth), control_mode: "Balanced" as "Balanced" },
+  openpose: { enabled: true, weight: f(openpose), control_mode: "My prompt is more important" as "My prompt is more important" },
+  softedge: { enabled: true, weight: f(softedge + 0.2), control_mode: "Balanced" as "Balanced" },
 });
 
 // type of a style preset with icon path, hallucination function and character modifiers
@@ -194,26 +198,18 @@ export type Preset = {
 
 
 export const presets = {
+  clay: { // clay or plastic figures
+    icon: "/assets/style/clay.png",
+    label: "Clay Figure",
+    func: (image, gender, age) => dif(image, "clazy2600.xYzn.ckpt", 0.7, 0.8, 0.4,
+      `clazy style, claymation, stopmotion, small clay figure of a ${chars.persons(gender, age)}, vibrant colors, fantastic plastic <lora:ClayAnimationRedmond15-ClayAnimation-Clay:0.7>`),
+  } as Preset,
 
-  // free: { // hallucinate freely with no style constraints
-  //   icon: "/assets/style/free.png",
-  //   label: "Freely Hallucinate",
-  //   func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.6, 0.5, 0.2,
-  //     chars.homosapiens(gender, age)),
-  // } as Preset,
-
-
-  gotcha: {
+  gotcha: { // heavily stylized illustrations
     icon: "/assets/style/gotcha.png",
     label: "Gotcha!",
-    func: (image, gender, age) => {
-      if (gender === "Couple") {
-        return dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.5, 0.7, 0.5,
-          `stylized cartoon, illustration, portrait of romantic ${chars.healthyboy(gender, age)}, (wheatish complexion:1.2), holding hands, intimate pose, gazing lovingly at each other, same faces as photo, forest in the background <lora:gotchaV001.Yu4Z:0.4>`);
-      }
-      return dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.5, 0.7, 0.5,
-        `stylized cartoon, illustration, portrait of ${chars.healthyboy(gender, age)}, (wheatish complexion:1.2), same face as photo, same facial structure, looking sideways, forest in the background <lora:gotchaV001.Yu4Z:0.4>`);
-    }
+    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.5, 0.5, 0.4,
+      `stylized cartoon, illustration, portrait of ${chars.healthyboy(gender, age)} and an animal, looking sideways, forest in the background <lora:gotchaV001.Yu4Z:0.4>`),
   } as Preset,
 
   // impasto: { // impasto oil painting
@@ -223,128 +219,135 @@ export const presets = {
   //     `((impasto)), intricate oil painting, thick textured paint, artistic, old holland classic colors, portrait of a ${chars.persons(gender, age)}, looking to the front`),
   // } as Preset,
 
-  kids: {
+  kids: { // delightful kids' illustration
     icon: "/assets/style/kids.png",
     label: "Kids' Illustration",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.7, 0.9, 0.5,
-      `kids illustration, children's cartoon, happy ${chars.healthyboy(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), North Indian features, sharp nose, bright eyes, same face as photo, same facial structure, looking at the camera, modern Indian kitchen in the background <lora:coolkidsMERGEV25.Qqci:1>`),
+    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.7, 0.9, 0.4,
+      `kids illustration, children's cartoon, happy ${chars.healthyboy(gender, age)}, looking at the camera, kitchen in the background <lora:coolkidsMERGEV25.Qqci:1>`),
   } as Preset,
 
-  marble: {
+  marble: { // marble sculpture in a museum
     icon: "/assets/style/marble.png",
     label: "Marble Sculpture",
-    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.5, 1.0, 0.5,
-      `white marble sculpture in a museum, bust of ${chars.persons(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), North Indian features, sharp nose, high cheekbones, defined jawline, same face as photo, same facial structure, classical Indian architecture in background, realistic photo, highly detailed`),
+    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.5, 1.0, 0.4,
+      `marble sculpture in a museum, greek bust of ${chars.persons(gender, age)} complete marble statue, offwhite color, greek hills, art gallery in the background, realistic photo`),
   } as Preset,
 
-  pencil: {
+  pencil: { // rough pencil drawing
     icon: "/assets/style/pencil.png",
     label: "Pencil Sketch",
-    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.8, 0.9, 0.4,
-      `very detailed pencil sketch, ${chars.persons(gender, age)}, fair complexion, North Indian features, sharp nose, high cheekbones, defined jawline, same face as photo, same facial structure, black-and white, hand-drawn, professional artist style`),
+    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.8, 0.8, 0.3,
+      `very rough pencil sketch, ${chars.persons(gender, age)}, black-and white, hand-drawn, scribble`),
   } as Preset,
 
   retro: { // stylized illustration with blocky colors
     icon: "/assets/style/retro.png",
     label: "Retro Stylized",
     func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.6, 0.4,
-      `stylized retro illustration, low palette, pastel colors, sharp lines, band album cover, North Indian ${chars.persons(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), sharp nose, high cheekbones, same face as photo`),
+      `stylized retro illustration, low palette, pastel colors, sharp lines, band album cover, ${chars.persons(gender, age)}`),
   } as Preset,
 
-  scifi: {
-    icon: "/assets/style/scifi.jpg",
+  scifi: { // futuristic sci-fi scene
+    icon: "/assets/style/scifi.png",
     label: "Sci-Fi",
-    func: (image, gender, age) => {
-      if (gender === "Couple") {
-        return dif(image, "absolutereality181.n8IR.safetensors", 1.0, 0.8, 0.6,
-          `futuristic sci-fi movie, romantic ${chars.persons(gender, age)}, (wheatish complexion:1.2), embracing each other, intimate moment, same faces as photo, neon lights illumination, modern Indian cityscape in background, cinematic lighting`);
-      }
-      return dif(image, "absolutereality181.n8IR.safetensors", 1.0, 0.8, 0.6,
-        `futuristic sci-fi movie, ${chars.persons(gender, age)}, (wheatish complexion:1.2), same face as photo, neon lights illumination, modern Indian cityscape in background, cinematic lighting`);
-    }
+    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 1.0, 0.8, 0.6,
+      `futuristic sci-fi movie, ${chars.persons(gender, age)}, neon lights illumination, distant night city in the background`),
   } as Preset,
 
   western: { // western comics (i.e. superman)
     icon: "/assets/style/western.png",
     label: "Western Comic",
     func: (image, gender, age) => dif(image, "westernanidiffusion.EpVW.safetensors", 0.7, 0.8, 0.4,
-      `western comic, portrait, ${chars.randomhero(gender, age)}, (wheatish complexion:1.2), same face as photo, looking to the side, metropolis in the background`)
+      `western comic, portrait, ${chars.randomhero(gender, age)}, looking to the side, metropolis in the background`)
   } as Preset,
 
-  anime: {
+  anime: { // anime movie screencap
     icon: "/assets/style/anime.png",
     label: "Anime",
-    func: (image, gender, age) => {
-      if (gender === "Couple") {
-        return dif(image, "animepasteldreamSoft.lTTK.safetensors", 0.9, 1.0, 0.6,
-          `anime illustration, movie still, ${chars.anime(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), North Indian features, romantic scene, holding hands, close together, defined features, large expressive eyes, same faces as photo, happy, cherry blossoms falling, bright sun, modern Indian town in the background, studio ghibli style`);
-      }
-      return dif(image, "animepasteldreamSoft.lTTK.safetensors", 0.9, 1.0, 0.6,
-        `anime illustration, movie still, ${chars.anime(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), North Indian features, defined features, large expressive eyes, same face as photo, same facial structure, happy, looking sideways, bright sun, modern Indian town in the background, studio ghibli style`);
-    }
+    func: (image, gender, age) => dif(image, "animepasteldreamSoft.lTTK.safetensors", 0.9, 1.0, 0.6,
+      `anime illustration, movie still, ${chars.anime(gender, age)}, smiling and happy, looking sideways, bright sun, summer, small town in the background`),
   } as Preset,
 
   medieval: { // horrible medieval painting
     icon: "/assets/style/impasto.png",
     label: "Medieval Painting",
     func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.4, 0.6, 0.2,
-      `medieval painting, framed, textured paint, ${chars.persons(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), , same face as photo, royal attire, palace in background`),
+      `bad mediaval painting, framed, textured paint, scene with a ${chars.persons(gender, age)}, stabbing king`),
   } as Preset,
 
-  astronaut: {
+  astronaut: { // photograph of an astronaut
     icon: "/assets/style/astronaut.png",
     label: "Astronaut",
-    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.6, 0.9, 0.5,
-      `portrait of ${chars.homosapiens(gender, age)} ISRO astronaut in spacesuit, (wheatish complexion:1.2), same face as photo, same facial structure, Indian space center in the background, realistic photo, shot on DSLR`),
+    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.6, 0.9, 0.4,
+      `portrait of ${chars.homosapiens(gender, age)} NASA astronaut in spacesuit before rocket launch, space photography in the background, realistic photo, shot on DSLR`),
   } as Preset,
 
   caricature: { // heavily caricaturized drawing
     icon: "/assets/style/caricature.png",
     label: "Caricature",
     func: (image, gender, age) => dif(image, "caricaturizer_pcrc_style.uwgn1lmj.q5b.ckpt", 0.6, 0.4, 0.1,
-      `caricature, hand-drawn illustration, portrait of a North Indian ${chars.persons(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), sharp nose, high cheekbones, same face as photo, looking sideways, exaggerated features but still recognizable`),
+      `caricature, hand-drawn illustration, portrait of a ${chars.persons(gender, age)}, looking sideways`),
   } as Preset,
 
   neotokyo: { // style of dark 90s anime
-    icon: "/assets/style/neotokyo.jpg",
+    icon: "/assets/style/neotokyo.png",
     label: "NEOTOKIO",
     func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 1.0, 0.8, 0.4,
-      `neotokio, 90s anime, North Indian ${chars.persons(gender, age)}, (wheatish complexion:1.2),  same face as photo, looking at the camera, portrait, evening, narrow alley in the background, bright neon signs <lora:NEOTOKIO_V0.01:0.7>`),
+      `neotokio, 90s anime, ${chars.persons(gender, age)}, looking at the camera, portrait, evening, narrow alley in the background, bright neon signs <lora:NEOTOKIO_V0.01:0.7>`),
   } as Preset,
 
   vaporwave: { // very colorful vibrant vaporwave illustration
     icon: "/assets/style/vaporwave.png",
     label: "Vaporwave",
     func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 1.0, 0.8, 0.6,
-      `vaporwave, illustration, vibrant colors, neon background, flying hair, North Indian ${chars.persons(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), sharp nose, high cheekbones, same face as photo, retro 80s aesthetic`),
+      `vaporwave, illustration, vibrant colors, neon background, flying hair, ${chars.persons(gender, age)}`),
   } as Preset,
 
-  watercolor: {
+  watercolor: { // watercolor painting
     icon: "/assets/style/watercolor.png",
     label: "Watercolor",
-    func: (image, gender, age) => {
-      if (gender === "Couple") {
-        return dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.9, 0.5,
-          `watercolor painting, hand-drawn illustration, romantic portrait of a ${chars.persons(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), North Indian features, sharp nose, high cheekbones, embracing each other, intimate moment, same faces as photo, looking at each other lovingly, sunset in background, modern Indian setting, clear white paper background, professional art <lora:watercolorv1.7lox:1>`);
-      }
-      return dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.9, 0.5,
-        `watercolor painting, hand-drawn illustration, portrait of a ${chars.persons(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), North Indian features, sharp nose, high cheekbones, same face as photo, same facial structure, looking sideways, modern Indian setting, clear white paper background, professional art <lora:watercolorv1.7lox:1>`);
-    }
+    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.9, 0.4,
+      `watercolor painting, hand-drawn illustration, portrait of a ${chars.persons(gender, age)}, looking sideways, clear white paper background <lora:watercolorv1.7lox:1>`),
   } as Preset,
-
   romantic: {
     icon: "/assets/style/romantic.png",
     label: "Romantic",
     func: (image, gender, age) => {
       if (gender === "Couple") {
         return dif(image, "absolutereality181.n8IR.safetensors", 0.7, 0.9, 0.5,
-          `romantic portrait, ${chars.persons(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), North Indian features, sharp nose, high cheekbones, embracing intimately, foreheads touching, looking into each other's eyes lovingly, same faces as photo, soft golden hour lighting, bokeh background, rose petals falling, professional photography, cinematic`);
+          `romantic portrait, ${chars.persons(gender, age)}, embracing intimately, foreheads touching, looking into each other's eyes lovingly, same faces as photo, soft golden hour lighting, bokeh background, rose petals falling, professional photography, cinematic`);
       }
       return dif(image, "absolutereality181.n8IR.safetensors", 0.7, 0.9, 0.5,
-        `portrait, ${chars.persons(gender, age)}, (fair skin:1.3), (wheatish complexion:1.2), North Indian features, sharp nose, high cheekbones, same face as photo, soft golden hour lighting, bokeh background, professional photography, cinematic`);
+        `portrait, ${chars.persons(gender, age)}, same face as photo, soft golden hour lighting, bokeh background, professional photography, cinematic`);
     }
   } as Preset,
 
-}
+  cyberpunk: {
+    icon: "/assets/style/cyberpunk.png",
+    label: "Cyberpunk",
+    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.9, 0.5,
+      `cyberpunk portrait, ${chars.persons(gender, age)}, neon lights, cybernetic implants, futuristic city background, rain, night scene, highly detailed, cinematic lighting, same face as reference, perfect facial similarity`),
+  } as Preset,
 
-export type Presets = keyof typeof presets;
+  oilpainting: {
+    icon: "/assets/style/oil.png",
+    label: "Oil Painting",
+    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.7, 0.8, 0.4,
+      `professional oil painting portrait, ${chars.persons(gender, age)}, masterpiece, detailed brushwork, classical style, museum quality, same face as reference, perfect facial similarity, art gallery lighting`),
+  } as Preset,
+
+  fantasy: {
+    icon: "/assets/style/fantasy.png",
+    label: "Fantasy Character",
+    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.9, 0.5,
+      `fantasy character portrait, ${chars.persons(gender, age)}, magical aura, fantasy landscape background, detailed fantasy clothing, same face as reference, perfect facial similarity, professional digital art, cinematic lighting`),
+  } as Preset,
+
+  hogwarts: {
+    icon: "/assets/style/hogwarts.png",
+    label: "Hogwarts",
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.8, 0.4,
+      `RAW photo, portrait of indian ${chars.persons(gender, age)}, Harry potter, hogwarts, magic, GRYFFINDOR UNIFORM, GRYFFINDOR EMBLEM, BLACK ROBE, round glasses, stone castle interior, professional photography, cinematic lighting, 8k uhd <lora:harry_potter_v1:1.2>GRYFFINDOR UNIFORM, GRYFFINDOR EMBLEM, BLACK ROBE`),
+  } as Preset,
+
+}
