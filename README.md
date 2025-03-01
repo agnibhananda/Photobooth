@@ -4,7 +4,7 @@
     Take a photo and let AI create personalized Indian-styled artwork!
 </p>
 
-# Project Name
+# Stable Diffusion powered Photobooth
 
 <div align="center">
   <img src="example.gif" alt="Example Usage" width="600"/>
