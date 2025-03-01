@@ -75,7 +75,7 @@ export async function diffusion(opt: DiffusionOptions): Promise<DataURI[]> {
     },
     body: JSON.stringify({
       prompt: opt.prompt,
-      negative_prompt: use(opt.negative_prompt, "deformed face, distorted face, disfigured, mutation, extra limbs, ugly, poorly drawn face, bad anatomy,"),
+      negative_prompt: use(opt.negative_prompt, "deformed face, distorted face, disfigured, mutation, extra limbs, ugly, poorly drawn face, bad anatomy,american, european, korean, japanese, chinese, east asian, african"),
       init_images: [ opt.image ],
       seed: use(opt.seed, -1),
       steps: use(opt.steps, 20),
@@ -230,7 +230,7 @@ export const presets = {
     icon: "/assets/style/marble.png",
     label: "Marble Sculpture",
     func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.5, 1.0, 0.4,
-      `marble sculpture in a museum, greek bust of ${chars.persons(gender, age)} complete marble statue, offwhite color, greek hills, art gallery in the background, realistic photo`),
+      `marble sculpture in a museum, white marble greek bust sculpture of ${chars.persons(gender, age)} complete marble statue, offwhite color, greek hills, art gallery in the background, realistic photo`),
   } as Preset,
 
   pencil: { // rough pencil drawing
@@ -326,28 +326,52 @@ export const presets = {
     icon: "/assets/style/cyberpunk.png",
     label: "Cyberpunk",
     func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.9, 0.5,
-      `cyberpunk portrait, ${chars.persons(gender, age)}, neon lights, cybernetic implants, futuristic city background, rain, night scene, highly detailed, cinematic lighting, same face as reference, perfect facial similarity`),
+      `cyberpunk portrait,blade runner, dystopian, ${chars.persons(gender, age)}, neon lights, cybernetic implants, futuristic city background, rain, night scene, highly detailed, cinematic lighting, same face as reference, perfect facial similarity`),
   } as Preset,
 
-  oilpainting: {
-    icon: "/assets/style/oil.png",
-    label: "Oil Painting",
-    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.7, 0.8, 0.4,
-      `professional oil painting portrait, ${chars.persons(gender, age)}, masterpiece, detailed brushwork, classical style, museum quality, same face as reference, perfect facial similarity, art gallery lighting`),
-  } as Preset,
 
-  fantasy: {
-    icon: "/assets/style/fantasy.png",
-    label: "Fantasy Character",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.9, 0.5,
-      `fantasy character portrait, ${chars.persons(gender, age)}, magical aura, fantasy landscape background, detailed fantasy clothing, same face as reference, perfect facial similarity, professional digital art, cinematic lighting`),
-  } as Preset,
 
   hogwarts: {
     icon: "/assets/style/hogwarts.png",
     label: "Hogwarts",
     func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.8, 0.4,
-      `RAW photo, portrait of indian ${chars.persons(gender, age)}, Harry potter, hogwarts, magic, GRYFFINDOR UNIFORM, GRYFFINDOR EMBLEM, BLACK ROBE, round glasses, stone castle interior, professional photography, cinematic lighting, 8k uhd <lora:harry_potter_v1:1.2>GRYFFINDOR UNIFORM, GRYFFINDOR EMBLEM, BLACK ROBE`),
+      `RAW photo, portrait of indian ${chars.persons(gender, age)}, hogwarts, magic, GRYFFINDOR UNIFORM, GRYFFINDOR EMBLEM, BLACK ROBE, round glasses, stone castle interior, professional photography, cinematic lighting, 8k uhd <lora:harry_potter_v1:1.2>GRYFFINDOR UNIFORM, GRYFFINDOR EMBLEM, BLACK ROBE`),
+  } as Preset,
+
+  fantasy: {
+    icon: "/assets/style/fantasy.png",
+    label: "Fantasy Epic",
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.9, 0.5,
+      `epic fantasy portrait, indian ${chars.persons(gender, age)}, wearing ornate medieval armor with intricate engravings,game of thrones, witcher,epic fantasy, dragons, long cape, dramatic lighting, castle throne room background, professional photography, cinematic composition, volumetric lighting, ultra detailed, 8k uhd <lora:add-detail-xl:0.7>`),
+  } as Preset,
+
+  impressionist: {
+    icon: "/assets/style/impressionist.png",
+    label: "Impressionist",
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.8, 0.4,
+      `impressionist oil painting, style of Monet, portrait of indian ${chars.persons(gender, age)}, vibrant brushstrokes, natural lighting, garden background with water lilies, masterpiece quality, museum grade art <lora:add-detail-xl:0.6>`),
+  } as Preset,
+
+  popart: {
+    icon: "/assets/style/popart.png",
+    label: "Pop Art",
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.9, 0.7, 0.6,
+      `pop art portrait, Andy Warhol style, indian ${chars.persons(gender, age)}, bold colors, halftone dots, high contrast, graphic art style, retro 60s aesthetic, screen printing effect <lora:add-detail-xl:0.5>`),
+  } as Preset,
+
+  disco: {
+    icon: "/assets/style/disco.png",
+    label: "Disco Night",
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.9, 0.5,
+      `vibrant disco portrait, indian ${chars.persons(gender, age)}, colorful disco lights, glitter, dance floor, retro 70s style, dynamic pose, disco ball reflections, professional nightclub photography, ultra detailed <lora:add-detail-xl:0.7>`),
+  } as Preset,
+
+
+  vangogh: {
+    icon: "/assets/style/vangogh.png",
+    label: "Van Gogh",
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.8, 0.4,
+      `oil painting in the style of Van Gogh, portrait of ${chars.persons(gender, age)}, swirling brushstrokes, impasto technique, starry night background, vibrant colors, expressive painting style, post-impressionist masterpiece, dramatic brush strokes, emotional artwork, professional fine art, museum quality <lora:add-detail-xl:0.6>`),
   } as Preset,
 
 }

@@ -38,55 +38,61 @@ if len(sys.argv) > 2:
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def add_watermark(image_data):
-    """Add transparent centered watermark to the image"""
+
     try:
         # Open the image from binary data
         img = Image.open(io.BytesIO(image_data))
         
-        # Open the watermark image
-        watermark_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public", "logo.png")
-        if not os.path.exists(watermark_path):
-            print(f"Warning: Watermark file not found at {watermark_path}")
-            return image_data
-            
-        watermark = Image.open(watermark_path).convert("RGBA")
+        # Open the watermark and social media images
+        base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public")
+        watermark = Image.open(os.path.join(base_path, "logo.png")).convert("RGBA")
+        insta_icon = Image.open(os.path.join(base_path, "insta.jpg")).convert("RGBA")
+        link_icon = Image.open(os.path.join(base_path, "link.png")).convert("RGBA")
         
-        # Resize watermark to be larger (30% of image width)
-        watermark_width = int(img.width * 1.00)
+        # Resize watermark (20% of image width)
+        watermark_width = int(img.width * 0.20)
         watermark_height = int(watermark.height * (watermark_width / watermark.width))
         watermark = watermark.resize((watermark_width, watermark_height))
         
-        # Make the watermark more transparent
-        watermark_data = watermark.getdata()
-        new_data = []
-        for item in watermark_data:
-            # Keep the RGB values but set alpha to 80 (about 30% opacity)
-            new_data.append((item[0], item[1], item[2], 80))
-        watermark.putdata(new_data)
+        # Resize Instagram icon (5% of image height)
+        insta_height = int(img.height * 0.05)
+        insta_width = int(insta_icon.width * (insta_height / insta_icon.height))
+        insta_icon = insta_icon.resize((insta_width, insta_height))
         
-        # Create a new transparent image the same size as the original
+        # Resize LinkedIn icon (6% of image height)
+        link_height = int(img.height * 0.06)
+        link_width = int(link_icon.width * (link_height / link_icon.height))
+        link_icon = link_icon.resize((link_width, link_height))
+        
+        # Create a new transparent image
         transparent = Image.new('RGBA', img.size, (0,0,0,0))
         
-        # Calculate center position
-        position = ((img.width - watermark_width) // 2, (img.height - watermark_height) // 2)
-        transparent.paste(watermark, position, watermark)
+        # Calculate positions
+        watermark_pos = (img.width - watermark_width - 20, 20)  # Top right
+        insta_pos = (0, img.height - insta_height)  # Bottom left
+        link_pos = (img.width - link_width , img.height - link_height)  # Bottom right
         
-        # Convert the original image to RGBA if it's not already
+        # Paste all images
+        transparent.paste(watermark, watermark_pos, watermark)
+        transparent.paste(insta_icon, insta_pos, insta_icon)
+        transparent.paste(link_icon, link_pos, link_icon)
+        
+        # Convert the original image to RGBA if needed
         if img.mode != 'RGBA':
             img = img.convert('RGBA')
         
         # Combine the images
         watermarked = Image.alpha_composite(img, transparent)
         
-        # Convert back to RGB for saving as JPEG
+        # Convert back to RGB for JPEG
         watermarked = watermarked.convert('RGB')
         
         # Save to bytes
         output = io.BytesIO()
-        watermarked.save(output, format='JPEG', quality=95)
+        watermarked.save(output, format='JPEG', quality=100)
         return output.getvalue()
     except Exception as e:
-        print(f"Error adding watermark: {e}")
+        print(f"Error adding watermark and icons: {e}")
         return image_data
 
 class FileServer(BaseHTTPRequestHandler):
