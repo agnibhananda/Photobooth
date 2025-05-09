@@ -83,6 +83,41 @@ function take_snapshot() {
 
 }
 
+// Handle file upload for images
+function handle_file_upload(event: Event) {
+  // Prevent processing during diffusion
+  if (diffusion_inflight.value === true) return;
+  
+  const fileInput = event.target as HTMLInputElement;
+  if (fileInput.files && fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+    
+    // Check if the file is an image
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target && typeof e.target.result === 'string') {
+        // Set the preview to uploaded image
+        snapshot.value!.src = e.target.result;
+        image.value = e.target.result;
+        
+        // Automatically start hallucination with current settings
+        if (gender.value !== undefined && age.value !== undefined && preset.value !== undefined) {
+          hallucinate();
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+    
+    // Reset the file input so the same file can be selected again
+    fileInput.value = '';
+  }
+}
+
 // reset snapshot and enable live view for capture
 function clear_snapshot() {
   if (diffusion_inflight.value === true) return;
@@ -283,6 +318,10 @@ async function upload(originalImageDataURI: string) {
             <button class="action-button" @click="take_snapshot" :disabled="diffusion_inflight">
               Capture
             </button>
+            <label class="action-button upload-button">
+              Upload
+              <input type="file" accept="image/*" @change="handle_file_upload" :disabled="diffusion_inflight" style="display: none;">
+            </label>
             <button class="action-button secondary" @click="clear_snapshot" :disabled="diffusion_inflight || image === null">
               Retake
             </button>
@@ -777,6 +816,15 @@ progress::-webkit-progress-value {
     padding: 0.5rem 0.8rem;
     font-size: 0.85rem;
   }
+}
+
+.upload-button {
+  background: linear-gradient(135deg, #4a90e2, #5b6dee);
+  cursor: pointer;
+}
+
+.upload-button:hover {
+  background: linear-gradient(135deg, #5b6dee, #4a90e2);
 }
 </style>
 

@@ -41,6 +41,9 @@ export type DiffusionOptions = {
     openpose: ControlNetOptions;
     depth: ControlNetOptions;
     softedge: ControlNetOptions;
+    ip_adapter?: ControlNetOptions;
+    instant_id?: ControlNetOptions;
+    reference?: ControlNetOptions;
   };
 
   // resolution, only squares for now
@@ -118,6 +121,33 @@ export async function diffusion(opt: DiffusionOptions): Promise<DataURI[]> {
               control_mode: use(opt.control.softedge.control_mode, "Balanced"),
               processor_res : opt.resolution || 512,
               resize_mode : "Crop and Resize",
+            },
+            {
+              module: "ip-adapter",
+              model: "ip-adapter_sd15",
+              enabled: opt.control.ip_adapter?.enabled || false,
+              weight: opt.control.ip_adapter?.weight || 0.8,
+              control_mode: use(opt.control.ip_adapter?.control_mode, "My prompt is more important"),
+              processor_res : opt.resolution || 512,
+              resize_mode : "Crop and Resize",
+            },
+            {
+              module: "instant_id",
+              model: "instantid_v1",
+              enabled: opt.control.instant_id?.enabled || false,
+              weight: opt.control.instant_id?.weight || 0.7,
+              control_mode: use(opt.control.instant_id?.control_mode, "My prompt is more important"),
+              processor_res : opt.resolution || 512,
+              resize_mode : "Crop and Resize",
+            },
+            {
+              module: "reference",
+              model: "reference_only",
+              enabled: opt.control.reference?.enabled || false,
+              weight: opt.control.reference?.weight || 0.8,
+              control_mode: use(opt.control.reference?.control_mode, "My prompt is more important"),
+              processor_res : opt.resolution || 512,
+              resize_mode : "Crop and Resize",
             }
           ]
         },
@@ -140,20 +170,32 @@ function dif(image: string, model: string, depth: number, pose: number, edges: n
   console.log("%c DIFFUSION prompt %c%s%c with %c%s", "background: lightgray", "background: yellowgreen", prompt,
     "background: lightgray", "background: lightblue", JSON.stringify({ model, depth, pose, edges }));
   
+  // Always use dreamshaper_8 regardless of what's passed
+  model = "dreamshaper_8.safetensors";
+  
   // Add stronger facial similarity to the prompt if not already present
-
+  const facialSimilarityTerms = ["same face as reference", "identical face", "exact face structure", "preserve face", "reference face"];
+  let enhancedPrompt = prompt;
+  
+  // Add facial similarity terms if they aren't already in the prompt
+  if (!facialSimilarityTerms.some(term => prompt.includes(term))) {
+    enhancedPrompt = `${prompt}, identical face as reference, exact facial features, perfect face likeness, preserve facial structure, same person`;
+  }
+  
+  // Add family-friendly terms to ensure the output is appropriate
+  enhancedPrompt = `${enhancedPrompt}, family friendly, sfw, safe for work`;
   
   return diffusion({ 
     image, 
-    prompt, 
+    prompt: enhancedPrompt, 
     model, 
-    denoising_strength: 0.70, // Further reduced to preserve more of the original face
-    control: controlfn(depth, pose, edges),
-    negative_prompt: "dark skin, african, american, east asian, european,deformed face, distorted face, disfigured, mutation, extra limbs, ugly, poorly drawn face, bad anatomy, different face, wrong face",
-    cfg_scale: 7.0,     // Further reduced to allow more influence from the reference image
-    steps: 40,          // Increased for better quality
+    denoising_strength: 0.7, // Balanced for stylization while preserving facial features
+    control: controlFnWithFacialPreservation(depth, pose, edges),
+    negative_prompt: "nsfw, nudity, naked, nude, sexual, suggestive, explicit content, adult content, pornographic, deformed face, distorted face, disfigured face, mutation, different face, wrong face, changed face, transformed face, bad facial features, bad face, inaccurate face, extra limbs, malformed limbs, fused fingers, extra fingers, poorly drawn hands, poorly drawn face, poorly drawn body, cross-eyed, ugly, low quality, worst quality",
+    cfg_scale: 6.0,     // Lower to better balance stylization and reference image
+    steps: 50,          // Higher step count for better quality
     resolution: 512,
-    sampler_name: "DPM++ 2M Karras"
+    sampler_name: "DPM++ SDE Karras" 
   });
 }
 
@@ -164,6 +206,16 @@ const controlfn = (depth: number, openpose: number, softedge: number) => ({
   depth:    { enabled: true, weight: f(depth), control_mode: "Balanced" as "Balanced" },
   openpose: { enabled: true, weight: f(openpose), control_mode: "My prompt is more important" as "My prompt is more important" },
   softedge: { enabled: true, weight: f(softedge + 0.2), control_mode: "Balanced" as "Balanced" },
+});
+
+// Enhanced control function with facial preservation settings
+const controlFnWithFacialPreservation = (depth: number, openpose: number, softedge: number) => ({
+  depth:    { enabled: true, weight: f(depth * 0.6), control_mode: "Balanced" as "Balanced" }, // Reduced for more creative freedom
+  openpose: { enabled: true, weight: f(openpose * 0.6), control_mode: "My prompt is more important" as "My prompt is more important" }, 
+  softedge: { enabled: true, weight: f(softedge * 0.5), control_mode: "Balanced" as "Balanced" }, // Reduced for more creative freedom
+  ip_adapter: { enabled: true, weight: 1.0, control_mode: "ControlNet is more important" as "ControlNet is more important" }, // Maximum for face preservation
+  instant_id: { enabled: true, weight: 1.0, control_mode: "ControlNet is more important" as "ControlNet is more important" }, // Maximum for face preservation
+  reference: { enabled: true, weight: 1.0, control_mode: "ControlNet is more important" as "ControlNet is more important" }, // Maximum for reference preservation
 });
 
 // type of a style preset with icon path, hallucination function and character modifiers
@@ -198,180 +250,185 @@ export type Preset = {
 
 
 export const presets = {
-  clay: { // clay or plastic figures
-    icon: "/assets/style/clay.png",
-    label: "Clay Figure",
-    func: (image, gender, age) => dif(image, "clazy2600.xYzn.ckpt", 0.7, 0.8, 0.4,
-      `clazy style, claymation, stopmotion, small clay figure of a ${chars.persons(gender, age)}, vibrant colors, fantastic plastic <lora:ClayAnimationRedmond15-ClayAnimation-Clay:0.7>`),
-  } as Preset,
-
   gotcha: { // heavily stylized illustrations
     icon: "/assets/style/gotcha.png",
     label: "Gotcha!",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.5, 0.5, 0.4,
-      `stylized cartoon, illustration, portrait of ${chars.healthyboy(gender, age)} and an animal, looking sideways, forest in the background <lora:gotchaV001.Yu4Z:0.4>`),
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.5, 0.5, 0.4,
+      `stylized cartoon, illustration, portrait of ${chars.healthyboy(gender, age)} and an animal, looking sideways, forest in the background, vibrant colors, stylized art <lora:gotchaV001.Yu4Z:0.6> <lora:add_detail:1.0>`),
   } as Preset,
 
-  // impasto: { // impasto oil painting
-  //   icon: "/assets/style/impasto.png",
-  //   label: "Impasto Painting",
-  //   func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.6, 0.6, 0.3,
-  //     `((impasto)), intricate oil painting, thick textured paint, artistic, old holland classic colors, portrait of a ${chars.persons(gender, age)}, looking to the front`),
+  // kids: { // delightful kids' illustration
+  //   icon: "/assets/style/kids.png",
+  //   label: "Kids' Illustration",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.9, 0.4,
+  //     `kids illustration, children's cartoon, happy ${chars.healthyboy(gender, age)}, looking at the camera, kitchen in the background, bright colors, stylized cartoon <lora:coolkidsMERGEV25.Qqci:1> <lora:add_detail:1.0>`),
   // } as Preset,
 
-  kids: { // delightful kids' illustration
-    icon: "/assets/style/kids.png",
-    label: "Kids' Illustration",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.7, 0.9, 0.4,
-      `kids illustration, children's cartoon, happy ${chars.healthyboy(gender, age)}, looking at the camera, kitchen in the background <lora:coolkidsMERGEV25.Qqci:1>`),
-  } as Preset,
+  // marble: { // marble sculpture in a museum
+  //   icon: "/assets/style/marble.png",
+  //   label: "Marble Sculpture",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.5, 1.0, 0.4,
+  //     `marble sculpture in a museum, white marble greek bust sculpture of ${chars.persons(gender, age)} complete marble statue, offwhite color, greek hills, art gallery in the background, stylized sculpture <lora:add_detail:1.0>`),
+  // } as Preset,
 
-  marble: { // marble sculpture in a museum
-    icon: "/assets/style/marble.png",
-    label: "Marble Sculpture",
-    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.5, 1.0, 0.4,
-      `marble sculpture in a museum, white marble greek bust sculpture of ${chars.persons(gender, age)} complete marble statue, offwhite color, greek hills, art gallery in the background, realistic photo`),
-  } as Preset,
-
-  pencil: { // rough pencil drawing
-    icon: "/assets/style/pencil.png",
-    label: "Pencil Sketch",
-    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.8, 0.8, 0.3,
-      `very rough pencil sketch, ${chars.persons(gender, age)}, black-and white, hand-drawn, scribble`),
-  } as Preset,
+  // pencil: { // rough pencil drawing
+  //   icon: "/assets/style/pencil.png",
+  //   label: "Pencil Sketch",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.8, 0.3,
+  //     `very rough pencil sketch, ${chars.persons(gender, age)}, black-and white, hand-drawn, scribble, artistic drawing, sketchy style <lora:add_detail:1.0>`),
+  // } as Preset,
 
   retro: { // stylized illustration with blocky colors
     icon: "/assets/style/retro.png",
     label: "Retro Stylized",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.6, 0.4,
-      `stylized retro illustration, low palette, pastel colors, sharp lines, band album cover, ${chars.persons(gender, age)}`),
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.6, 0.4,
+      `stylized retro illustration, low palette, pastel colors, sharp lines, band album cover, ${chars.persons(gender, age)}, vintage poster style <lora:add_detail:1.0>`),
   } as Preset,
 
-  scifi: { // futuristic sci-fi scene
-    icon: "/assets/style/scifi.png",
-    label: "Sci-Fi",
-    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 1.0, 0.8, 0.6,
-      `futuristic sci-fi movie, ${chars.persons(gender, age)}, neon lights illumination, distant night city in the background`),
-  } as Preset,
+  // scifi: { // futuristic sci-fi scene
+  //   icon: "/assets/style/scifi.png",
+  //   label: "Sci-Fi",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 1.0, 0.8, 0.6,
+  //     `futuristic sci-fi movie, ${chars.persons(gender, age)}, neon lights illumination, distant night city in the background, stylized sci-fi art <lora:add_detail:1.0>`),
+  // } as Preset,
 
   western: { // western comics (i.e. superman)
     icon: "/assets/style/western.png",
-    label: "Western Comic",
-    func: (image, gender, age) => dif(image, "westernanidiffusion.EpVW.safetensors", 0.7, 0.8, 0.4,
-      `western comic, portrait, ${chars.randomhero(gender, age)}, looking to the side, metropolis in the background`)
+    label: "Comic",
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.8, 0.4,
+      `anime style, 2nd art, comic art,western comic, portrait, ${chars.randomhero(gender, age)}, looking to the side, metropolis in the background, comic book style, bold lineart <lora:add_detail:1.0>`),
   } as Preset,
 
-  anime: { // anime movie screencap
-    icon: "/assets/style/anime.png",
-    label: "Anime",
-    func: (image, gender, age) => dif(image, "animepasteldreamSoft.lTTK.safetensors", 0.9, 1.0, 0.6,
-      `anime illustration, movie still, ${chars.anime(gender, age)}, smiling and happy, looking sideways, bright sun, summer, small town in the background`),
-  } as Preset,
+  // anime: { // anime movie screencap
+  //   icon: "/assets/style/anime.png",
+  //   label: "Anime",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.9, 1.0, 0.6,
+  //     `anime illustration, movie still, ${chars.anime(gender, age)}, smiling and happy, looking sideways, bright sun, summer, small town in the background, vibrant anime style <lora:add_detail:1.0>`),
+  // } as Preset,
 
-  medieval: { // horrible medieval painting
-    icon: "/assets/style/impasto.png",
-    label: "Medieval Painting",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.4, 0.6, 0.2,
-      `bad mediaval painting, framed, textured paint, scene with a ${chars.persons(gender, age)}, stabbing king`),
-  } as Preset,
+  // medieval: { // horrible medieval painting
+  //   icon: "/assets/style/impasto.png",
+  //   label: "Medieval Painting",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.4, 0.6, 0.2,
+  //     `medieval painting, framed, textured paint, scene with a ${chars.persons(gender, age)}, historical artwork style <lora:add_detail:1.0>`),
+  // } as Preset,
 
-  astronaut: { // photograph of an astronaut
-    icon: "/assets/style/astronaut.png",
-    label: "Astronaut",
-    func: (image, gender, age) => dif(image, "absolutereality181.n8IR.safetensors", 0.6, 0.9, 0.4,
-      `portrait of ${chars.homosapiens(gender, age)} NASA astronaut in spacesuit before rocket launch, space photography in the background, realistic photo, shot on DSLR`),
-  } as Preset,
+  // astronaut: { // astronaut
+  //   icon: "/assets/style/astronaut.png",
+  //   label: "Astronaut",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.6, 0.9, 0.4,
+  //     `portrait of ${chars.homosapiens(gender, age)} NASA astronaut in spacesuit before rocket launch, space photography in the background, stylized space art <lora:add_detail:1.0>`),
+  // } as Preset,
 
-  caricature: { // heavily caricaturized drawing
-    icon: "/assets/style/caricature.png",
-    label: "Caricature",
-    func: (image, gender, age) => dif(image, "caricaturizer_pcrc_style.uwgn1lmj.q5b.ckpt", 0.6, 0.4, 0.1,
-      `caricature, hand-drawn illustration, portrait of a ${chars.persons(gender, age)}, looking sideways`),
-  } as Preset,
+  // caricature: { // heavily caricaturized drawing
+  //   icon: "/assets/style/caricature.png",
+  //   label: "Caricature",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.6, 0.4, 0.1,
+  //     `caricature, hand-drawn illustration, portrait of a ${chars.persons(gender, age)}, looking sideways, exaggerated art style <lora:add_detail:1.0>`),
+  // } as Preset,
 
   neotokyo: { // style of dark 90s anime
     icon: "/assets/style/neotokyo.png",
     label: "NEOTOKIO",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 1.0, 0.8, 0.4,
-      `neotokio, 90s anime, ${chars.persons(gender, age)}, looking at the camera, portrait, evening, narrow alley in the background, bright neon signs <lora:NEOTOKIO_V0.01:0.7>`),
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 1.0, 0.8, 0.4,
+      `neotokio, 90s anime, ${chars.persons(gender, age)}, looking at the camera, portrait, evening, narrow alley in the background, bright neon signs, cyberpunk anime <lora:NEOTOKIO_V0.01:0.7> <lora:add_detail:1.0>`),
   } as Preset,
 
   vaporwave: { // very colorful vibrant vaporwave illustration
     icon: "/assets/style/vaporwave.png",
     label: "Vaporwave",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 1.0, 0.8, 0.6,
-      `vaporwave, illustration, vibrant colors, neon background, flying hair, ${chars.persons(gender, age)}`),
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 1.0, 0.8, 0.6,
+      `vaporwave, illustration, vibrant colors, neon background, flying hair, ${chars.persons(gender, age)}, retro digital art style <lora:add_detail:1.0>`),
   } as Preset,
 
-  watercolor: { // watercolor painting
-    icon: "/assets/style/watercolor.png",
-    label: "Watercolor",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.9, 0.4,
-      `watercolor painting, hand-drawn illustration, portrait of a ${chars.persons(gender, age)}, looking sideways, clear white paper background <lora:watercolorv1.7lox:1>`),
-  } as Preset,
-  romantic: {
-    icon: "/assets/style/romantic.png",
-    label: "Romantic",
-    func: (image, gender, age) => {
-      if (gender === "Couple") {
-        return dif(image, "absolutereality181.n8IR.safetensors", 0.7, 0.9, 0.5,
-          `romantic portrait, ${chars.persons(gender, age)}, embracing intimately, foreheads touching, looking into each other's eyes lovingly, same faces as photo, soft golden hour lighting, bokeh background, rose petals falling, professional photography, cinematic`);
-      }
-      return dif(image, "absolutereality181.n8IR.safetensors", 0.7, 0.9, 0.5,
-        `portrait, ${chars.persons(gender, age)}, same face as photo, soft golden hour lighting, bokeh background, professional photography, cinematic`);
-    }
-  } as Preset,
+  // watercolor: { // watercolor painting
+  //   icon: "/assets/style/watercolor.png",
+  //   label: "Watercolor",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.9, 0.4,
+  //     `watercolor painting, hand-drawn illustration, portrait of a ${chars.persons(gender, age)}, looking sideways, clear white paper background, artistic painting <lora:watercolorv1.7lox:1> <lora:add_detail:1.0>`),
+  // } as Preset,
 
   cyberpunk: {
     icon: "/assets/style/cyberpunk.png",
     label: "Cyberpunk",
-    func: (image, gender, age) => dif(image, "dreamshaper8Pruned.hz5Q.safetensors", 0.8, 0.9, 0.5,
-      `cyberpunk portrait,blade runner, dystopian, ${chars.persons(gender, age)}, neon lights, cybernetic implants, futuristic city background, rain, night scene, highly detailed, cinematic lighting, same face as reference, perfect facial similarity`),
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.9, 0.5,
+      `cyberpunk portrait, blade runner, dystopian, ${chars.persons(gender, age)}, neon lights, cybernetic implants, futuristic city background, rain, night scene, highly detailed, stylized digital art <lora:add_detail:1.0>`),
   } as Preset,
-
-
 
   hogwarts: {
     icon: "/assets/style/hogwarts.png",
     label: "Hogwarts",
     func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.8, 0.4,
-      `RAW photo, portrait of indian ${chars.persons(gender, age)}, hogwarts, magic, GRYFFINDOR UNIFORM, GRYFFINDOR EMBLEM, BLACK ROBE, round glasses, stone castle interior, professional photography, cinematic lighting, 8k uhd <lora:harry_potter_v1:1.2>GRYFFINDOR UNIFORM, GRYFFINDOR EMBLEM, BLACK ROBE`),
+      `2d art, anime art, line art, fantasy portrait of ${chars.persons(gender, age)}, magic school uniform, BLACK ROBE with house crest, magic wand, stone castle interior, great hall background, magical atmosphere, stylized fantasy art <lora:HP:0.6> <lora:add_detail:1.0>`),
   } as Preset,
 
-  fantasy: {
-    icon: "/assets/style/fantasy.png",
-    label: "Fantasy Epic",
-    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.9, 0.5,
-      `epic fantasy portrait, indian ${chars.persons(gender, age)}, wearing ornate medieval armor with intricate engravings,game of thrones, witcher,epic fantasy, dragons, long cape, dramatic lighting, castle throne room background, professional photography, cinematic composition, volumetric lighting, ultra detailed, 8k uhd <lora:add-detail-xl:0.7>`),
-  } as Preset,
+  // fantasy: {
+  //   icon: "/assets/style/fantasy.png",
+  //   label: "Fantasy Epic",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.9, 0.5,
+  //     `epic fantasy portrait, ${chars.persons(gender, age)}, wearing ornate medieval armor with intricate engravings, fantasy setting, dragons, long cape, dramatic lighting, castle throne room background, stylized fantasy illustration <lora:add_detail:1.0>`),
+  // } as Preset,
 
   impressionist: {
     icon: "/assets/style/impressionist.png",
     label: "Impressionist",
     func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.8, 0.4,
-      `impressionist oil painting, style of Monet, portrait of indian ${chars.persons(gender, age)}, vibrant brushstrokes, natural lighting, garden background with water lilies, masterpiece quality, museum grade art <lora:add-detail-xl:0.6>`),
+      `impressionist oil painting, style of Monet, portrait of ${chars.persons(gender, age)}, vibrant brushstrokes, natural lighting, garden background with water lilies, artistic painting style <lora:add_detail:1.0>`),
   } as Preset,
 
   popart: {
-    icon: "/assets/style/popart.png",
+    icon: "/assets/style/pop.png",
     label: "Pop Art",
     func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.9, 0.7, 0.6,
-      `pop art portrait, Andy Warhol style, indian ${chars.persons(gender, age)}, bold colors, halftone dots, high contrast, graphic art style, retro 60s aesthetic, screen printing effect <lora:add-detail-xl:0.5>`),
+      `pop art portrait, Andy Warhol style, ${chars.persons(gender, age)}, bold colors, halftone dots, high contrast, graphic art style, retro 60s aesthetic, stylized pop art <lora:add_detail:1.0>`),
   } as Preset,
 
-  disco: {
-    icon: "/assets/style/disco.png",
-    label: "Disco Night",
-    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.9, 0.5,
-      `vibrant disco portrait, indian ${chars.persons(gender, age)}, colorful disco lights, glitter, dance floor, retro 70s style, dynamic pose, disco ball reflections, professional nightclub photography, ultra detailed <lora:add-detail-xl:0.7>`),
-  } as Preset,
-
+  // disco: {
+  //   icon: "/assets/style/disco.png",
+  //   label: "Disco Night",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.9, 0.5,
+  //     `vibrant disco portrait, ${chars.persons(gender, age)}, colorful disco lights, glitter, dance floor, retro 70s style, stylized illustration, disco ball reflections <lora:add_detail:1.0>`),
+  // } as Preset,
 
   vangogh: {
     icon: "/assets/style/vangogh.png",
     label: "Van Gogh",
     func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.8, 0.4,
-      `oil painting in the style of Van Gogh, portrait of ${chars.persons(gender, age)}, swirling brushstrokes, impasto technique, starry night background, vibrant colors, expressive painting style, post-impressionist masterpiece, dramatic brush strokes, emotional artwork, professional fine art, museum quality <lora:add-detail-xl:0.6>`),
+      `oil painting in the style of Van Gogh, portrait of ${chars.persons(gender, age)}, swirling brushstrokes, impasto technique, starry night background, vibrant colors, expressive brushwork, post-impressionist style <lora:add_detail:1.0>`),
   } as Preset,
 
+  // colourcore: {
+  //   icon: "/assets/style/vaporwave.png",
+  //   label: "Colourcore",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.8, 0.7, 0.5,
+  //     `portrait of ${chars.persons(gender, age)}, c0l0urc0r3, cute, bright colours, candy, vibrant, high contrast, bold colors, colorful background, flat colors, flat illustration, highly stylized <lora:c0l0urc0r3XLP2:0.8> <lora:add_detail:1.0>`),
+  // } as Preset,
+
+  // nineties_anime: {
+  //   icon: "/assets/style/anime.png",
+  //   label: "90s Anime",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.9, 0.8, 0.6,
+  //     `90s4n1m3, retro anime illustration, portrait of ${chars.anime(gender, age)}, bold expressive character, vibrant color palette, cel shaded, nostalgic 90s aesthetic, dramatic pose, highly stylized anime <lora:90s4n1m3XLP:0.8> <lora:add_detail:1.0>`),
+  // } as Preset,
+
+  ghibli: {
+    icon: "/assets/style/ghibli.png",
+    label: "Pastel Style",
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.6, 0.7, 0.4,
+      `Ghibli style, whimsical portrait of ${chars.persons(gender, age)}, pastoral setting, soft lighting, gentle colors, detailed background, hand-painted appearance <lora:Ghibli:1.0> <lora:add_detail:1.0>`),
+  } as Preset,
+
+  phandigrams: {
+    icon: "/assets/style/medieval.png",
+    label: "Medieval",
+    func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.8, 0.5,
+      `By Phandigrams, fantasy portrait of ${chars.persons(gender, age)}, mythical medieval setting, cinematic lighting, intricate details, rich textures, atmospheric scene, stylized fantasy art <lora:Phandigrams_III:1.5> <lora:add_detail:1.0>`),
+  } as Preset,
+
+  // anime_art: {
+  //   icon: "/assets/style/anime.png",
+  //   label: "Anime Art",
+  //   func: (image, gender, age) => dif(image, "dreamshaper_8.safetensors", 0.7, 0.7, 0.4,
+  //     `Anime art, stylized illustration of ${chars.anime(gender, age)}, vivid colors, clean lines, expressive eyes, detailed artwork, professional anime style, highly stylized <lora:animeArt:1.3> <lora:add_detail:1.0>`),
+  // } as Preset,
 }
