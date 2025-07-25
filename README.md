@@ -1,7 +1,7 @@
 <h1 align="center">AI Photo Booth</h1>
 <p align="center">
     Transform photos into artistic portraits using Stable Diffusion<br>
-    Take a photo and let AI create personalized Indian-styled artwork!
+    Take a photo and let AI create stylised artwork!
 </p>
 
 # Stable Diffusion powered Photobooth
@@ -14,14 +14,14 @@
 
 ## Description
 
-This AI Photo Booth application transforms photos into various artistic styles while maintaining Indian features and characteristics. It uses Stable Diffusion with ControlNet for accurate pose and feature preservation.
+This AI Photo Booth application transforms photos into various artistic styles. It uses Stable Diffusion with ControlNet for accurate pose and feature preservation.
 
 ## Overview
 
 ## Requirements
 
 1. **GPU Server Requirements:**
-   - NVIDIA GPU (RTX 4070 Ti or better recommended)
+   - NVIDIA GPU (RTX 4050 or better recommended)
    - [Stable Diffusion WebUI](https://github.com/AUTOMATIC1111/stable-diffusion-webui) installed
    - ControlNet extension
    - Required models (see Models section)
@@ -98,20 +98,6 @@ For a production setup, run Firefox in kiosk mode:
 firefox -kiosk http://localhost:5173/
 ```
 
-## Features
-
-- Multiple artistic styles including:
-  - Clay Figure
-  - Anime
-  - Watercolor
-  - Sci-Fi
-  - Marble Sculpture
-  - and more!
-- Indian-specific features and characteristics
-- Real-time photo capture
-- QR code sharing
-- Progress visualization
-- Keyboard shortcuts (Shift-S for capture)
 
 ## Models Required
 
@@ -119,9 +105,6 @@ Download these models from [Civitai](https://civitai.com/) or [Hugging Face](htt
 
 1. Base Models:
    - dreamshaper8Pruned.hz5Q.safetensors
-   - absolutereality181.n8IR.safetensors
-   - animepasteldreamSoft.lTTK.safetensors
-   - (See models.md for complete list)
 
 2. ControlNet Models:
    - control_v11p_sd15_openpose
