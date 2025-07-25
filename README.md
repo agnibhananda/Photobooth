@@ -104,12 +104,21 @@ firefox -kiosk http://localhost:5173/
 Download these models from [Civitai](https://civitai.com/) or [Hugging Face](https://huggingface.co/):
 
 1. Base Models:
-   - dreamshaper8Pruned.hz5Q.safetensors
+   - dreamshaper_8.safetensors
+2. LoRA Models:
+   - add_detail
+   - gotchaV001.Yu4Z
+   - NEOTOKIO_V0.01
+   - HP
+   - Ghibli
+   - Phandigrams_III
 
 2. ControlNet Models:
    - control_v11p_sd15_openpose
    - control_v11f1p_sd15_depth
    - control_v11p_sd15_softedge
+   - ip-adapter_sd15
+   - instantid_v1
 
 ## Troubleshooting
 
